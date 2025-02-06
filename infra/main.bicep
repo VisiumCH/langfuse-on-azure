@@ -1,9 +1,16 @@
-targetScope = 'subscription'
+targetScope = 'resourceGroup'
 
 @minLength(1)
 @maxLength(64)
 @description('Name to prefix all resources')
-param name string = 'babybuddy'
+param name string = 'langfuse-test'
+
+param keyVaultName string = '' // Set in main.parameters.json
+param postgresServerName string = '' // Set in main.parameters.json
+param logAnalyticsWorkspaceName string = '' // Set in main.parameters.json
+param containerAppEnvName string = '' // Set in main.parameters.json
+param containerAppName string = '' // Set in main.parameters.json
+param databaseName string = 'langfuse' // Set in main.parameters.json
 
 @minLength(1)
 @description('Primary location for all resources')
@@ -28,33 +35,25 @@ param authClientSecret string = ''
 param authTenantId string = ''
 
 var databaseAdmin = 'dbadmin'
-var databaseName = 'langfuse'
 var resourceToken = toLower(uniqueString(subscription().id, name, location))
 
 var tags = { 'azd-env-name': name }
 var prefix = '${name}-${resourceToken}'
 
-resource resourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' = {
-  name: '${name}-resource-group'
-  location: location
-  tags: tags
-}
 
 // Store secrets in a keyvault
 module keyVault './core/security/keyvault.bicep' = {
   name: 'keyvault'
-  scope: resourceGroup
   params: {
-    name: '${replace(take(prefix, 17), '-', '')}-vault'
+    name: !empty(keyVaultName) ? keyVaultName : '${replace(take(prefix, 17), '-', '')}-vault'
     location: location
     tags: tags
   }
 }
 
-// Give the principal access to KeyVault
+// Give the principal access to KeyVault (currently user deploying the resources)
 module principalKeyVaultAccess './core/security/keyvault-access.bicep' = {
   name: 'keyvault-access-${principalId}'
-  scope: resourceGroup
   params: {
     keyVaultName: keyVault.outputs.name
     principalId: principalId
@@ -63,9 +62,8 @@ module principalKeyVaultAccess './core/security/keyvault-access.bicep' = {
 
 module postgresServer 'core/database/flexibleserver.bicep' = {
   name: 'postgresql'
-  scope: resourceGroup
   params: {
-    name: '${prefix}-postgresql'
+    name: !empty(postgresServerName) ? postgresServerName : '${prefix}-postgresql'
     location: location
     tags: tags
     sku: {
@@ -79,15 +77,14 @@ module postgresServer 'core/database/flexibleserver.bicep' = {
     administratorLogin: databaseAdmin
     administratorLoginPassword: databasePassword
     databaseNames: [ databaseName ]
-    allowAzureIPsFirewall: true
+    allowAzureIPsFirewall: false
   }
 }
 
 module logAnalyticsWorkspace 'core/monitor/loganalytics.bicep' = {
   name: 'loganalytics'
-  scope: resourceGroup
   params: {
-    name: '${prefix}-loganalytics'
+    name: !empty(logAnalyticsWorkspaceName) ? logAnalyticsWorkspaceName : '${prefix}-loganalytics'
     location: location
     tags: tags
   }
@@ -95,21 +92,18 @@ module logAnalyticsWorkspace 'core/monitor/loganalytics.bicep' = {
 
 module containerAppEnv 'core/host/container-app-env.bicep' = {
   name: 'container-env'
-  scope: resourceGroup
   params: {
-    name: containerAppName
+    name: !empty(containerAppEnvName) ? containerAppEnvName : '${prefix}-app'
     location: location
     tags: tags
     logAnalyticsWorkspaceName: logAnalyticsWorkspace.outputs.name
   }
 }
 
-var containerAppName = '${prefix}-app'
 module containerApp 'core/host/container-app.bicep' = {
   name: 'container'
-  scope: resourceGroup
   params: {
-    name: containerAppName
+    name: !empty(containerAppName) ? containerAppName : '${prefix}-app'
     location: location
     tags: tags
     containerEnvId: containerAppEnv.outputs.id
@@ -187,7 +181,6 @@ var secrets = [
 
 module keyVaultSecrets './core/security/keyvault-secret.bicep' = [for secret in secrets: {
   name: 'keyvault-secret-${secret.name}'
-  scope: resourceGroup
   params: {
     keyVaultName: keyVault.outputs.name
     name: secret.name

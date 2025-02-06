@@ -11,6 +11,25 @@
       "principalId": {
         "value": "${AZURE_PRINCIPAL_ID}"
       },
+      "keyVaultName": {
+        "value": "${AZURE_KEY_VAULT_NAME}"
+      },
+      "postgresServerName": {
+        "value": "${AZURE_POSTGRES_SERVER_NAME}"
+      },
+      "logAnalyticsWorkspaceName": {
+        "value": "${AZURE_LOG_ANALYTICS_WORKSPACE_NAME}"
+      },
+      "containerAppEnvName": {
+        "value": "${AZURE_CONTAINER_APP_ENV_NAME}"
+      },
+      "containerAppName": {
+        "value": "${AZURE_CONTAINER_APP_NAME}"
+      },
+      "databaseName": {
+        "value": "${AZURE_DATABASE_NAME}"
+      },
+
       "databasePassword": {
         "value": "$(secretOrRandomPassword ${AZURE_KEY_VAULT_NAME} DATABASEPASSWORD)"
       },
