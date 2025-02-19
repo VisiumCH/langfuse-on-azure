@@ -18,10 +18,6 @@ Use the [Azure Developer CLI](https://learn.microsoft.com/azure/developer/azure-
 
 Langfuse is a platform for LLM observability and evaluation. They provide an open-source SDK and containerized web application to receive the SDK's data. This project deploys the Langfuse web application to Azure Container Apps, and uses PostgreSQL to store the data. It also includes a script to set up Entra-based authentication for the web app. Once you have deployed Langfuse, you can integrate the SDK into your LLM applications according to the [Langfuse documentation](https://langfuse.com/docs/) and start sending data to the web app.
 
-From a deployed Generations tab in Langfuse:
-
-![Screenshot of Langfuse Generations tabs](./screenshot_langfuse.png)
-
 Table of contents:
 
 * [Opening this project](#opening-this-project)
@@ -59,24 +55,18 @@ A related option is VS Code Dev Containers, which will open the project in your 
 1. Install the required tools:
 
     * [Azure Developer CLI](https://aka.ms/azure-dev/install)
-    * [Python 3.9, 3.10, or 3.11](https://www.python.org/downloads/) (Only necessary if you want to enable authentication)
+    * [Python 3.9, 3.10, or 3.11](https://www.python.org/downloads/) (Only necessary if you want to enable authentication via script)
 
-2. Create a new folder and switch to it in the terminal.
-3. Run this command to download the project code:
+2. Clone this repository
 
-    ```shell
-    azd init -t langfuse-on-azure
-    ```
-
-    Note that this command will initialize a git repository, so you do not need to clone this repository.
-
-4. Create a Python virtual environment and install the required packages:
+4. Create a Python virtual environment and install the required package. We use pipenv and the required packages are defined in the Pipfile and Pipfile.lock in the root directory. If the user prefers using venv, the requirements.txt file is found in the root.
 
     ```shell
-    pip install -r requirements.txt
+    pipenv install
+    pipenv shell
     ```
 
-5. Open a terminal window inside the project folder.
+
 
 ## Deploying to Azure
 
@@ -88,16 +78,15 @@ Follow these steps to deploy Langfuse to Azure:
     azd auth login
     ```
 
-1. Create a new azd environment:
+2. Create a new azd environment:
 
     ```shell
-    azd env new
+    azd env new <env-name>
     ```
 
-    Enter a name that will be used for the resource group.
     This will create a new folder in the `.azure` folder, and set it as the active environment for any calls to `azd` going forward.
 
-1. (Optional) By default, the deployed Azure Container App will use the Langfuse authentication system, meaning anyone with routable network access to the web app can attempt to login to it. To enable Entra-based authentication, set the `AZURE_USE_AUTHENTICATION` environment variable to `true`:
+3. (Optional) By default, the deployed Azure Container App will use the Langfuse authentication system, meaning anyone with routable network access to the web app can attempt to login to it. To enable Entra-based authentication, set the `AZURE_USE_AUTHENTICATION` environment variable to `true`:
 
     ```shell
     azd env set AZURE_USE_AUTHENTICATION true
@@ -109,7 +98,16 @@ Follow these steps to deploy Langfuse to Azure:
     azd env set AZURE_AUTH_TENANT_ID your-tenant-id
     ```
 
-1. Run this command to provision all the resources:
+    To disable username and password as authentication method, set the `AUTH_DISABLE_USERNAME_PASSWORD` environment variable to `true`
+
+    ```shell
+    azd env set AUTH_DISABLE_USERNAME_PASSWORD true
+    ```
+
+    > ⚠️ **IMPORTANT:** Azure authentication requires app registration. If the `AZURE_USE_AUTHENTICATION` environment variable is set to `true`, the deployment will use the `auth_init.sh` and `auth_update.sh` hooks to set up the necessary resources for Entra-based authentication, including app registration, and pass the necessary environment variables to the Azure Container App. If script-based app registration is not allowed, deploy the resources with `AZURE_USE_AUTHENTICATION` set to `false` and change it manually after deployment.
+
+
+4. Run this command to provision all the resources:
 
     ```shell
     azd provision
@@ -118,8 +116,32 @@ Follow these steps to deploy Langfuse to Azure:
     This will create a new resource group, and create the Azure Container App and PostgreSQL Flexible server inside that group.
     If you enabled authentication, it will use the `auth_init.sh` and `auth_update.sh` hooks to set up the necessary resources for Entra-based authentication, and pass the necessary environment variables to the Azure Container App.
 
-1. Once the deployment is complete, you will see the URL for the Azure Container App in the output. You can open this URL in your browser to see the Langfuse web app.
+4. Once the deployment is complete, you will see the URL for the Azure Container App in the output. You can open this URL in your browser to see the Langfuse web app.
 
-## Disclaimer
+## (Optional) Azure Authentication
 
-Langfuse is an external project and is not affiliated with Microsoft.
+If at deployment the default Langfuse username/password authentication was selected, you can change it to Azure authentication manually.
+
+1. Manual App registration
+2. Manually add secrets to the Container App:
+    - Navigate to the Azure Portal
+    - Select the deployed Container App
+    - Navigate to Settings -> Secrets
+    - Update the `authclientsecret`
+3. Manually add requireed environment variables to the Container App:
+    - Navigate to Application -> Revisions and Replicas
+    - Select `Create new revision`
+    - Select the container image and `Edit`
+    - Select the `Environment variables` Tab.
+    - Add (or Edit if already existing) `AUTH_AZURE_AD_TENANT_ID`, Source=`Manual entry`, Value=`<your-tenant-id>`
+    - Add (or Edit if already existing) `AUTH_AZURE_AD_CLIENT_ID`, Source=`Manual entry`, Value=`<your-client-id>`
+    - Add (or Edit if already existing) `AUTH_AZURE_AD_CLIENT_SECRET`, Source=`Reference a secret`, Value=`authclientsecret`
+
+
+## (Optional) Langfuse Customization
+
+The Langfuse deployment can also be partly customized through the usage of environment variables. The user can find the list of environment variables in the [official documentation](https://langfuse.com/self-hosting/v2/deployment-guide).
+
+> ⚠️ **IMPORTANT:** The Langfuse image that is deployed is the Version 2 of the Langfuse software. A later version (V3) has been released in December 2024, however as of now (February 2025) the latest version cannot yet be easily self-hosted in Azure.
+
+> ⚠️ **IMPORTANT:** The default deployment is for the Free version of the self-hosted Langfuse. Langfuse allows additional customizations under the Enterprise Edition.
